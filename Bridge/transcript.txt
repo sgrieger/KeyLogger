@@ -1,0 +1,134 @@
+Here is a structured, complete transcript of our session. You can copy and paste this directly into your project notes or documentation to pick up exactly where we left off when you are back at the office.
+------------------------------
+## Project Brief: PC-to-ESP32 Assistive Key Logger## Project Goal
+To create an assistive device link where a disabled user typing anywhere on a Windows PC (regardless of the active app) has their live keystrokes intercepted and sent to an ESP32-S3 over a USB cable. The ESP32-S3 will parse the text stream in real-time, print the typed letters on a physical OLED screen for visual validation, and trigger an external physical device when specific target commands are typed.
+------------------------------
+## Part 1: The Windows Host Script (esp32_bridge.py)
+This script must be run inside a Windows Terminal with Administrator privileges (Right-click Terminal / Command Prompt ➡️ Run as administrator). It hooks into the global Windows keyboard API, intercepts every character pressed, and pipes it straight over the USB line.
+Required Packages: pip install keyboard pyserial
+
+import serialimport keyboardimport time
+# Update 'COM3' to match the ESP32-S3's active Windows portCOM_PORT = 'COM3'  BAUD_RATE = 115200
+
+print(f"Connecting to ESP32-S3 on {COM_PORT}...")try:
+    esp32 = serial.Serial(COM_PORT, BAUD_RATE, timeout=1)
+    time.sleep(2) # Allow Native USB on S3 to settle
+    print("Connected successfully!")except Exception as e:
+    print(f"Error: {e}. (Ensure Arduino Serial Monitor is closed first!)")
+    exit()
+
+print("\n--- Live Keystroke Streamer Active ---")
+print("Every key you type anywhere on Windows is being mirrored to the ESP32-S3.")
+print("Press 'Ctrl + C' inside this terminal window to stop.")
+def on_key_event(event):
+    if event.event_type == keyboard.KEY_DOWN:
+        # Stream individual printable characters
+        if len(event.name) == 1:
+            esp32.write(event.name.encode('utf-8'))
+        elif event.name == 'space':
+            esp32.write(b' ')
+# Hook into the Windows OS input stream globally
+keyboard.hook(on_key_event)
+keyboard.wait()
+
+------------------------------
+## Part 2: The Microcontroller Firmware (ESP32-S3)
+This code uses a running text buffer. It accepts letters continuously without requiring an "Enter" keypress, logs them to an I2C OLED screen for user visibility, and activates pins upon matching commands (ON, OFF, BLINK).
+Required Arduino IDE Libraries: Adafruit SSD1306 and Adafruit GFX Library
+Required IDE Settings: Go to Tools > USB CDC On Boot and set to Enabled.
+
+#include <Wire.h>#include <Adafruit_GFX.h>#include <Adafruit_SSD1306.h>
+#define SCREEN_WIDTH 128#define SCREEN_HEIGHT 64#define OLED_RESET    -1Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+const int DEVICE_PIN = 2; // Target physical pin to control hardwareString inputBuffer = "";  const int MAX_BUFFER_SIZE = 8; // Restricts string length to fit comfortably on screen
+void updateDisplay(String statusMessage = "") {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  
+  // Header section: Status/Instructions
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  if (statusMessage != "") {
+    display.println(statusMessage);
+  } else {
+    display.println("Waiting for command...");
+  }
+  
+  display.drawFastHLine(0, 12, 128, SSD1306_WHITE);
+  
+  // Main section: Visual text logger for the user
+  display.setTextSize(2); 
+  display.setCursor(0, 24);
+  display.print("> ");
+  display.print(inputBuffer);
+  
+  display.display();
+}
+void setup() {
+  Serial.begin(115200);
+  while (!Serial && millis() < 3000); // Wait for native S3 USB stack to mount
+
+  pinMode(DEVICE_PIN, OUTPUT);
+  digitalWrite(DEVICE_PIN, LOW);
+
+  // Initialize display. Standard S3 hardware I2C lines: SDA=Pin 8, SCL=Pin 9
+  Wire.begin(8, 9); 
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+    Serial.println("OLED connection failure.");
+    for(;;); 
+  }
+  
+  updateDisplay("System Active");
+}
+void loop() {
+  while (Serial.available() > 0) {
+    char incomingChar = Serial.read();
+    
+    if (isprint(incomingChar) || incomingChar == ' ') {
+      inputBuffer += incomingChar;
+    }
+
+    // Keep buffer strictly within visual bounds
+    if (inputBuffer.length() > MAX_BUFFER_SIZE) {
+      inputBuffer = inputBuffer.substring(inputBuffer.length() - MAX_BUFFER_SIZE);
+    }
+
+    inputBuffer.toUpperCase();
+    updateDisplay(); 
+
+    // Stream-based string matching
+    if (inputBuffer.endsWith("ON")) {
+      digitalWrite(DEVICE_PIN, HIGH);
+      updateDisplay("SUCCESS: ON");
+      delay(1500);
+      inputBuffer = "";
+      updateDisplay();
+    } 
+    else if (inputBuffer.endsWith("OFF")) {
+      digitalWrite(DEVICE_PIN, LOW);
+      updateDisplay("SUCCESS: OFF");
+      delay(1500);
+      inputBuffer = "";
+      updateDisplay();
+    } 
+    else if (inputBuffer.endsWith("BLINK")) {
+      updateDisplay("BLINKING...");
+      for(int i = 0; i < 6; i++) {
+        digitalWrite(DEVICE_PIN, !digitalRead(DEVICE_PIN));
+        delay(200);
+      }
+      digitalWrite(DEVICE_PIN, LOW);
+      inputBuffer = "";
+      updateDisplay();
+    }
+  }
+}
+
+------------------------------
+## Next Steps & Action Items (When you get to the office):
+
+   1. Identify the screen driver chip (Is it an SSD1306 or a different controller like the SH1106?).
+   2. Verify display communication type (Confirm it has 4 pins for I2C and not 7 pins for SPI).
+   3. Map out the exact hardware pins on your specific flavor of ESP32-S3 development board to ensure the screen and the physical payload item are connected correctly.
+
+Whenever you are ready to resume, just let me know the exact hardware models you managed to gather from the office!
+
