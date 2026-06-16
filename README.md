@@ -28,6 +28,8 @@ All keys pressed on the target computer will now also appear on the webpage.
 ## Teaching 
 1. You can go to a website that allows a Username and Password and demonstrate how even on a password field that shows *** as the password, that the key logger is able to see the password as you type it in in clear text.
 2. You can explain that on a device like this, the bad actor can simply walk past the office, log into the device AP, download the data and keep walking. There is no more need to sit at that station ever again.
+3. By typing in "blink" and showing that something happens means that the microcontroller does not need to be simply passive, it has the ability to control other devices, or even send data to a given location. So the use inadvertantly can trigger an event that might even encrypt the entire computer or any server it is connected to.
+4. It can also send commands to the computer to respond to. This then means that once the microcontroller has identified a rich target, it can log into it, at a set time, and affect real changes using the username and password captured by it.
 
 
 Again, this is simulated for deomstration purposes olny and as a teaching aid.
