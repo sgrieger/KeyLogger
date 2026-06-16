@@ -1,3 +1,9 @@
+/*
+This is a simple KeyLogger example application to show to students
+It needs to have Bridge.exe running on the host computer and it needs the
+ESP32 Microcontroller, that is running this code, to be inserted into the host computer as well
+*/
+
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h> 
